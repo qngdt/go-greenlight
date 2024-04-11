@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"greenlight/internal/data"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -28,6 +29,7 @@ type config struct {
 type application struct {
 	config config
 	logger *log.Logger
+	models data.Models
 }
 
 func main() {
@@ -44,16 +46,18 @@ func main() {
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_, err := openDB(cfg, ctx)
+	db, err := openDB(cfg, ctx)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
+	defer db.Close()
 	defer cancel()
 
 	app := &application{
 		config: cfg,
 		logger: logger,
+		models: data.NewModels(db),
 	}
 
 	srv := &http.Server{
@@ -88,8 +92,6 @@ func openDB(cfg config, ctx context.Context) (*pgxpool.Pool, error) {
 		fmt.Fprintf(os.Stderr, "Unable to parse max idle time: %v\n", err)
 		return nil, err
 	}
-
-	defer db.Close()
 
 	err = db.Ping(ctx)
 	if err != nil {
