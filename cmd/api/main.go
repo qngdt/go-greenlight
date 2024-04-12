@@ -45,14 +45,12 @@ func main() {
 
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	db, err := openDB(cfg, ctx)
+	db, err := openDB(cfg)
 	if err != nil {
 		logger.Fatal(err)
 	}
 
 	defer db.Close()
-	defer cancel()
 
 	app := &application{
 		config: cfg,
@@ -73,12 +71,16 @@ func main() {
 	logger.Fatal(err)
 }
 
-func openDB(cfg config, ctx context.Context) (*pgxpool.Pool, error) {
+func openDB(cfg config) (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig(cfg.db.dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to parse DSN: %v\n", err)
 		return nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	defer cancel()
 
 	config.MaxConns = int32(cfg.db.maxOpenConns)
 	config.MaxConnIdleTime, err = time.ParseDuration(cfg.db.maxIdleTime)
