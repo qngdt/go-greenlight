@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"errors"
+	"fmt"
 	"greenlight/internal/validator"
 	"time"
 
@@ -136,4 +137,50 @@ func (m MovieModel) Delete(id int64) error {
 	}
 
 	return nil
+}
+
+func (m MovieModel) GetAll(title string, genres []string, filters Filters) (
+	[]*Movie,
+	Metadata,
+	error,
+) {
+	query := fmt.Sprintf(`
+		SELECT count(*) OVER(), id, created_at, title, year, runtime, genres, version
+		FROM movies
+		WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '') AND (genres @> $2 OR $2 = '{}')
+		ORDER BY %s %s, id ASC
+		LIMIT $3 OFFSET $4
+	`, filters.sortColumn(), filters.sortDirection())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.Query(ctx, query, title, genres, filters.limit(), filters.offset())
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	defer rows.Close()
+
+	totalRecords := 0
+	movies, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (*Movie, error) {
+		var movie Movie
+		err := row.Scan(
+			&totalRecords,
+			&movie.ID,
+			&movie.CreatedAt,
+			&movie.Title,
+			&movie.Year,
+			&movie.Runtime,
+			&movie.Genres,
+			&movie.Version,
+		)
+		return &movie, err
+	})
+
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+
+	return movies, calculateMetadata(totalRecords, filters.Page, filters.PageSize), nil
 }
