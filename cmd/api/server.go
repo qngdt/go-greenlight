@@ -30,27 +30,31 @@ func (app *application) serve() error {
 		// relay them to the quit channel. Any other signals will not be caught by
 		// signal.Notify() and will retain their default behavior.
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-		// Read the signal from the quit channel. This code will block until a signal is
-		// received.
 		s := <-quit
+		app.logger.PrintInfo("caught signal", map[string]string{"signal": s.String()})
 
-		// Log a message to say that the signal has been caught. Notice that we also
-		// call the String() method on the signal to get the signal name and include it
-		// in the log entry properties.
-		app.logger.PrintInfo("shutting down server", map[string]string{
-			"signal": s.String(),
-		})
-
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			shutdownError <- err
+		}
+
+		app.logger.PrintInfo(
+			"completing background tasks",
+			map[string]string{
+				"addr": srv.Addr,
+			},
+		)
 
 		// Call Shutdown() on our server, passing in the context we just made.
 		// Shutdown() will return nil if the graceful shutdown was successful, or an
 		// error (which may happen because of a problem closing the listeners, or
 		// because the shutdown didn't complete before the 20-second context deadline is
 		// hit). We relay this return value to the shutdownError channel.
-		shutdownError <- srv.Shutdown(ctx)
+		app.wg.Wait()
+		shutdownError <- nil
 	}()
 
 	app.logger.PrintInfo("starting server", map[string]string{"addr": srv.Addr,
