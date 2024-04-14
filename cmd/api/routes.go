@@ -1,8 +1,19 @@
 package main
 
-import "net/http"
+import (
+	"expvar"
+	"net/http"
+)
 
 func (app *application) routes() http.Handler {
+	middlewareStack := CreateStack(
+		app.metrics,
+		app.recoverPanic,
+		app.enableCORS,
+		app.rateLimit,
+		app.authenticate,
+	)
+
 	router := http.NewServeMux()
 	router.HandleFunc("GET /v1/healthcheck", app.healthCheckHandler)
 	router.HandleFunc("GET /v1/movies", app.requirePermission("movies:read", app.listMovieHandler))
@@ -16,5 +27,7 @@ func (app *application) routes() http.Handler {
 
 	router.HandleFunc("POST /v1/tokens/authentication", app.createAuthenticationTokenHandler)
 
-	return app.recoverPanic(app.enableCORS(app.rateLimit(app.authenticate(router))))
+	router.Handle("GET /debug/vars", expvar.Handler())
+
+	return app.recoverPanic(middlewareStack(router))
 }
