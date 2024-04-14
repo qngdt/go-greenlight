@@ -22,7 +22,9 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	user := &data.User{
-		Name: input.Name, Email: input.Email, Activated: false,
+		Name:      input.Name,
+		Email:     input.Email,
+		Activated: false,
 	}
 
 	err = user.Password.Set(input.Password)
@@ -46,6 +48,12 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
+		return
+	}
+
+	err = app.models.Permissions.AddForUser(user.ID, "movies:read")
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
 		return
 	}
 
