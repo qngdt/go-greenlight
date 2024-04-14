@@ -12,6 +12,7 @@ func (app *application) routes() http.Handler {
 	router.HandleFunc("DELETE /v1/movies/{id}", app.deleteMovieHandler)
 
 	router.HandleFunc("POST /v1/users", app.registerUserHandler)
+	router.HandleFunc("PUT /v1/users/activated", app.activateUserHandler)
 
 	return app.recoverPanic(app.rateLimit(router))
 }
